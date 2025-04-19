@@ -4,28 +4,16 @@ import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 
 export default function Home() {
-  const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    if (acceptedFiles.length > 0) {
-      setFile(acceptedFiles[0]);
-    }
-  }, []);
+  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    if (acceptedFiles.length === 0) return;
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx']
-    },
-    maxFiles: 1
-  });
-
-  const handleSubmit = async () => {
-    if (!file) return;
-
+    const file = acceptedFiles[0];
     setIsProcessing(true);
+    setError(null);
+
     const formData = new FormData();
     formData.append('file', file);
 
@@ -38,58 +26,60 @@ export default function Home() {
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
-        setDownloadUrl(url);
+        
+        // Create a temporary link and trigger download
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'speaker_notes.docx';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
       } else {
         throw new Error('Failed to process file');
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('Failed to process the file. Please try again.');
+      setError('Failed to process the file. Please try again.');
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx']
+    },
+    maxFiles: 1,
+    noClick: true
+  });
 
   return (
-    <main className="min-h-screen p-8">
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">PowerPoint Notes Extractor</h1>
+    <main {...getRootProps()} className="min-h-screen p-8">
+      <input {...getInputProps()} />
+      <div className={`max-w-2xl mx-auto transition-all duration-200 ${
+        isDragActive ? 'scale-105' : ''
+      }`}>
+        <h1 className="text-3xl font-bold mb-8 text-center">PowerPoint Notes Extractor</h1>
         
-        <div
-          {...getRootProps()}
-          className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
-            ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
-        >
-          <input {...getInputProps()} />
-          {isDragActive ? (
-            <p>Drop the PowerPoint file here...</p>
+        <div className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors
+          ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
+          {isProcessing ? (
+            <p className="text-lg">Processing your file...</p>
+          ) : isDragActive ? (
+            <p className="text-lg">Drop the PowerPoint file here...</p>
           ) : (
-            <p>Drag and drop a PowerPoint file here, or click to select one</p>
+            <div>
+              <p className="text-lg mb-4">Drag and drop a PowerPoint file anywhere on this page</p>
+              <p className="text-sm text-gray-600">Only .pptx files are supported</p>
+            </div>
           )}
         </div>
 
-        {file && (
-          <div className="mt-4">
-            <p className="text-sm text-gray-600">Selected file: {file.name}</p>
-            <button
-              onClick={handleSubmit}
-              disabled={isProcessing}
-              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
-            >
-              {isProcessing ? 'Processing...' : 'Extract Notes'}
-            </button>
-          </div>
-        )}
-
-        {downloadUrl && (
-          <div className="mt-4">
-            <a
-              href={downloadUrl}
-              download="speaker_notes.docx"
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-            >
-              Download Notes
-            </a>
+        {error && (
+          <div className="mt-4 p-4 bg-red-100 text-red-700 rounded-lg">
+            {error}
           </div>
         )}
       </div>
