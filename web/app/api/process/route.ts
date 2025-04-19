@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     try {
       // Run the Python script with the correct environment
       const { stdout, stderr } = await execAsync(
-        `python3 ${pythonScript} "${inputPath}" "${outputPath}"`,
+        `/opt/python/bin/python3 ${pythonScript} "${inputPath}" "${outputPath}"`,
         {
           env: {
             ...process.env,
