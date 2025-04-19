@@ -56,14 +56,14 @@ export default function Home() {
   });
 
   return (
-    <main {...getRootProps()} className="min-h-screen p-8">
+    <main {...getRootProps()} className="min-h-screen p-8 flex flex-col">
       <input {...getInputProps()} />
-      <div className={`max-w-2xl mx-auto transition-all duration-200 ${
+      <div className={`flex-1 flex flex-col justify-center transition-all duration-200 ${
         isDragActive ? 'scale-105' : ''
       }`}>
         <h1 className="text-3xl font-bold mb-8 text-center">PowerPoint Notes Extractor</h1>
         
-        <div className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors
+        <div className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors h-[80vh] flex flex-col justify-center
           ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
           {isProcessing ? (
             <p className="text-lg">Processing your file...</p>
