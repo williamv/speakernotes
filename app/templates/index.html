@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerPoint Notes Extractor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            position: relative;
+        }
+        .drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 4px;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+            background: #f8f8f8;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .drop-zone.dragover {
+            background: #e8e8e8;
+            border-color: #666;
+        }
+        .drop-text {
+            display: block;
+            font-size: 1.2em;
+            color: #666;
+            margin-top: 10px;
+        }
+        .drop-text.dragover {
+            display: none;
+        }
+        #notes-container {
+            margin-top: 20px;
+        }
+        .slide-notes {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .slide-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .error {
+            color: red;
+            margin: 10px 0;
+        }
+        .success {
+            color: green;
+            margin: 10px 0;
+        }
+        .download-link {
+            display: inline-block;
+            margin: 10px 0;
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .download-link:hover {
+            background-color: #45a049;
+        }
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.1);
+            display: none;
+            z-index: 1000;
+        }
+        .overlay.dragover {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="overlay" id="overlay"></div>
+    
+    <h1>PowerPoint Notes Extractor</h1>
+    <p>Drag and drop your PowerPoint file (.pptx) anywhere on this page to extract speaker notes:</p>
+    
+    <div class="drop-zone" id="dropZone">
+        <span class="drop-text">Drop your PowerPoint file here</span>
+    </div>
+    
+    <div id="notes-container"></div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const notesContainer = document.getElementById('notes-container');
+        const overlay = document.getElementById('overlay');
+        const body = document.body;
+        const dropText = document.querySelector('.drop-text');
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.add('dragover');
+            overlay.classList.add('dragover');
+            dropText.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('dragover');
+            overlay.classList.remove('dragover');
+            dropText.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('dragover');
+            overlay.classList.remove('dragover');
+            dropText.classList.remove('dragover');
+            
+            const file = e.dataTransfer.files[0];
+            if (!file) return;
+            
+            if (!file.name.endsWith('.pptx')) {
+                notesContainer.innerHTML = '<div class="error">Please upload a PowerPoint (.pptx) file</div>';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    notesContainer.innerHTML = `<div class="error">${data.error}</div>`;
+                    return;
+                }
+
+                // Display the notes on the page
+                let html = '<div class="success">Notes extracted successfully!</div>';
+                data.notes.forEach((note, index) => {
+                    if (note.trim()) {
+                        html += `
+                            <div class="slide-notes">
+                                <div class="slide-header">Slide ${index + 1}</div>
+                                <div class="note-content">${note.replace(/\n/g, '<br>')}</div>
+                            </div>
+                        `;
+                    }
+                });
+                
+                notesContainer.innerHTML = html || '<div>No notes found in the presentation</div>';
+                
+                // Automatically trigger the download
+                window.location.href = data.doc_url;
+            })
+            .catch(error => {
+                notesContainer.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            });
+        }
+
+        // Add event listeners to both the body and drop zone
+        body.addEventListener('dragover', handleDragOver);
+        body.addEventListener('dragleave', handleDragLeave);
+        body.addEventListener('drop', handleDrop);
+
+        dropZone.addEventListener('dragover', handleDragOver);
+        dropZone.addEventListener('dragleave', handleDragLeave);
+        dropZone.addEventListener('drop', handleDrop);
+    </script>
+</body>
+</html> 

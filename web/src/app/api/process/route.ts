@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
-import { parseOfficeAsync } from 'officeparser';
 import { saveTempFile, cleanupTempFile } from '@/utils/fileUtils';
+import PPTX2Json from 'pptx2json';
 
 export async function POST(request: Request) {
   try {
@@ -15,33 +15,46 @@ export async function POST(request: Request) {
       );
     }
 
+    console.log('Processing file:', file.name);
     let inputPath: string | null = null;
 
     try {
       // Save the uploaded file temporarily
       inputPath = await saveTempFile(file);
+      console.log('Temporary file saved at:', inputPath);
 
       // Parse the PowerPoint file
-      const parsedText = await parseOfficeAsync(inputPath, {
-        ignoreNotes: false,
-        putNotesAtLast: false,
-        newlineDelimiter: '\n'
-      });
+      console.log('Starting PowerPoint parsing...');
+      const parser = new PPTX2Json();
+      const json = await parser.parse(inputPath);
+      console.log('JSON structure:', JSON.stringify(json, null, 2));
 
-      // Split the text into slides based on the format
-      const slides = parsedText.split(/\n(?=Slide \d+)/).filter(Boolean);
+      if (!json || !json.slides) {
+        throw new Error('No content extracted from PowerPoint file');
+      }
 
       // Create paragraphs for each slide's notes
-      const paragraphs = slides.map((slideText: string) => {
-        const [header, ...notes] = slideText.split('\n');
+      const paragraphs = json.slides.map((slide: any, index: number) => {
+        const notes = slide.notes || '';
+        console.log(`Slide ${index + 1} notes:`, notes);
+
+        // Extract the first 4 words for the header
+        const firstFourWords = notes
+          .split(/\s+/)
+          .filter((word: string) => word.length > 0)
+          .slice(0, 4)
+          .join(' ');
+
+        const slideHeader = `Slide ${index + 1} - ${firstFourWords}`;
+
         return [
           new Paragraph({
-            text: header.trim(),
-            heading: HeadingLevel.HEADING_1,
+            text: slideHeader,
+            heading: HeadingLevel.HEADING_2,
           }),
           new Paragraph({
             children: [
-              new TextRun(notes.join('\n').trim())
+              new TextRun(notes)
             ]
           })
         ];
@@ -68,7 +81,7 @@ export async function POST(request: Request) {
     } catch (error) {
       console.error('Error processing file:', error);
       return NextResponse.json(
-        { error: 'Failed to process file' },
+        { error: 'Failed to process file: ' + (error as Error).message },
         { status: 500 }
       );
     } finally {
