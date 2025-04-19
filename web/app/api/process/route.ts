@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
 import { writeFile, mkdir, readFile } from 'fs/promises';
 import { join } from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
+import pptx2json from 'pptx2json';
 import os from 'os';
-
-const execAsync = promisify(exec);
 
 export async function POST(request: Request) {
   try {
@@ -28,40 +26,60 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(bytes);
     await writeFile(inputPath, buffer);
 
-    // Run the Python script with the correct Python path
-    const pythonScript = join(process.cwd(), 'extract_notes.py');
-    console.log('Running Python script:', pythonScript);
-    console.log('Input path:', inputPath);
-    console.log('Output path:', outputPath);
-    
     try {
-      // Run the Python script with the correct environment
-      const { stdout, stderr } = await execAsync(
-        `/opt/python/bin/python3 ${pythonScript} "${inputPath}" "${outputPath}"`,
-        {
-          env: {
-            ...process.env,
-            PYTHONPATH: process.env.PYTHONPATH || '/var/task/python'
-          }
-        }
-      );
+      // Parse the PowerPoint file
+      const pptxData = await pptx2json(inputPath);
+      
+      // Create a new Word document
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({
+              text: "Speaker Notes",
+              heading: HeadingLevel.TITLE,
+            }),
+            new Paragraph({}),
+          ],
+        }],
+      });
 
-      console.log('Python script output:', stdout);
-      if (stderr) console.error('Python script errors:', stderr);
+      // Process each slide
+      for (let i = 0; i < pptxData.slides.length; i++) {
+        const slide = pptxData.slides[i];
+        
+        // Add slide number as header
+        doc.addParagraph(
+          new Paragraph({
+            text: `Slide ${i + 1}`,
+            heading: HeadingLevel.HEADING_1,
+          })
+        );
 
-      // Check if the output file exists
-      try {
-        await readFile(outputPath);
-      } catch (error) {
-        console.error('Output file not found:', error);
-        throw new Error('Failed to generate output file');
+        // Get notes
+        const notes = slide.notes || 'No notes for this slide.';
+        
+        // Add notes with proper formatting
+        doc.addParagraph(
+          new Paragraph({
+            children: [new TextRun(notes)],
+          })
+        );
+        doc.addParagraph(new Paragraph({}));
       }
+
+      // Save the document
+      const docBuffer = await Packer.toBuffer(doc);
+      await writeFile(outputPath, docBuffer);
 
       // Read the output file
       const outputBuffer = await readFile(outputPath);
 
       // Clean up temporary files
-      await execAsync(`rm -rf ${tempDir}`).catch(console.error);
+      await Promise.all([
+        writeFile(inputPath, '').catch(console.error),
+        writeFile(outputPath, '').catch(console.error),
+      ]);
 
       // Return the file
       return new NextResponse(outputBuffer, {
@@ -72,7 +90,10 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       // Clean up temporary files in case of error
-      await execAsync(`rm -rf ${tempDir}`).catch(console.error);
+      await Promise.all([
+        writeFile(inputPath, '').catch(console.error),
+        writeFile(outputPath, '').catch(console.error),
+      ]);
       throw error;
     }
   } catch (error) {
