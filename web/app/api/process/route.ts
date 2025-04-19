@@ -3,6 +3,7 @@ import { writeFile, mkdir, readFile } from 'fs/promises';
 import { join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import os from 'os';
 
 const execAsync = promisify(exec);
 
@@ -15,8 +16,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Create a temporary directory for processing
-    const tempDir = join(process.cwd(), 'temp');
+    // Use the system's temp directory
+    const tempDir = join(os.tmpdir(), 'speakernotes');
     await mkdir(tempDir, { recursive: true });
     
     const inputPath = join(tempDir, file.name);
@@ -34,9 +35,15 @@ export async function POST(request: Request) {
     console.log('Output path:', outputPath);
     
     try {
-      // Run the Python script
+      // Run the Python script with the correct environment
       const { stdout, stderr } = await execAsync(
-        `python3 ${pythonScript} "${inputPath}" "${outputPath}"`
+        `python3 ${pythonScript} "${inputPath}" "${outputPath}"`,
+        {
+          env: {
+            ...process.env,
+            PYTHONPATH: process.env.PYTHONPATH || '/var/task/python'
+          }
+        }
       );
 
       console.log('Python script output:', stdout);
@@ -54,7 +61,7 @@ export async function POST(request: Request) {
       const outputBuffer = await readFile(outputPath);
 
       // Clean up temporary files
-      await execAsync(`rm -rf ${tempDir}`);
+      await execAsync(`rm -rf ${tempDir}`).catch(console.error);
 
       // Return the file
       return new NextResponse(outputBuffer, {
