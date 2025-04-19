@@ -11,10 +11,9 @@
   "dependencies": {
     "docx": "^9.4.1",
     "next": "15.3.1",
-    "pptx2json": "^0.0.10",
+    "officeparser": "^5.1.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-dropzone": "^14.3.8"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
