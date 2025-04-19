@@ -33,32 +33,45 @@ export async function POST(request: Request) {
     console.log('Input path:', inputPath);
     console.log('Output path:', outputPath);
     
-    // Use the full path to Python and set PYTHONPATH
-    const { stdout, stderr } = await execAsync(
-      `PYTHONPATH=/usr/local/lib/python3.11/site-packages python3 ${pythonScript} "${inputPath}" "${outputPath}"`,
-      { env: { ...process.env, PYTHONPATH: '/usr/local/lib/python3.11/site-packages' } }
-    );
+    try {
+      // Run the Python script
+      const { stdout, stderr } = await execAsync(
+        `python3 ${pythonScript} "${inputPath}" "${outputPath}"`
+      );
 
-    console.log('Python script output:', stdout);
-    if (stderr) console.error('Python script errors:', stderr);
+      console.log('Python script output:', stdout);
+      if (stderr) console.error('Python script errors:', stderr);
 
-    // Read the output file directly
-    const outputBuffer = await readFile(outputPath);
+      // Check if the output file exists
+      try {
+        await readFile(outputPath);
+      } catch (error) {
+        console.error('Output file not found:', error);
+        throw new Error('Failed to generate output file');
+      }
 
-    // Clean up temporary files
-    await execAsync(`rm -rf ${tempDir}`);
+      // Read the output file
+      const outputBuffer = await readFile(outputPath);
 
-    // Return the file
-    return new NextResponse(outputBuffer, {
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': 'attachment; filename="speaker_notes.docx"',
-      },
-    });
+      // Clean up temporary files
+      await execAsync(`rm -rf ${tempDir}`);
+
+      // Return the file
+      return new NextResponse(outputBuffer, {
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'Content-Disposition': 'attachment; filename="speaker_notes.docx"',
+        },
+      });
+    } catch (error) {
+      // Clean up temporary files in case of error
+      await execAsync(`rm -rf ${tempDir}`).catch(console.error);
+      throw error;
+    }
   } catch (error) {
     console.error('Error processing file:', error);
     return NextResponse.json(
-      { error: 'Failed to process file. Please make sure the file is a valid PowerPoint file.' },
+      { error: error instanceof Error ? error.message : 'Failed to process file. Please make sure the file is a valid PowerPoint file.' },
       { status: 500 }
     );
   }

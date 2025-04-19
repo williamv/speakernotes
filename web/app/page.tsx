@@ -23,24 +23,30 @@ export default function Home() {
         body: formData,
       });
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        
-        // Create a temporary link and trigger download
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'speaker_notes.docx';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      } else {
-        throw new Error('Failed to process file');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to process file');
       }
+
+      const blob = await response.blob();
+      
+      if (blob.size === 0) {
+        throw new Error('Received empty file from server');
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create a temporary link and trigger download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'speaker_notes.docx';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error:', error);
-      setError('Failed to process the file. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to process the file. Please try again.');
     } finally {
       setIsProcessing(false);
     }
